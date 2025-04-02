@@ -1,34 +1,26 @@
 # R/global.R
 
-# List of required packages
-list_of_packages <- c("shiny", "caret", "MASS", "lme4", 
-                      "randomForest", "xgboost", "glmnet", "pROC")
-
-# Install missing packages
-new_packages <- list_of_packages[!(list_of_packages %in% installed.packages()[,"Package"])]
-if(length(new_packages)) install.packages(new_packages)
-
-# Load required packages
+# List of required packages and installation (omitted for brevity)
+# Load required libraries and source helpers and modules
 library(shiny)
-library(caret)         # for confusionMatrix, cross-validation, preProcess, createDataPartition
-library(MASS)          # for stepAIC (stepwise regression)
-library(lme4)          # for mixed-effects logistic regression
-library(randomForest)  # for random forest
-library(xgboost)       # for gradient boosting
-library(glmnet)        # for ridge regression
-library(pROC)          # for ROC curves and AUC
+library(caret)
+library(MASS)
+library(lme4)
+library(randomForest)
+library(xgboost)
+library(glmnet)
+library(pROC)
+library(summarytools)
 
-# Source helper functions
 source("helpers.R")
-
-# Source modules
 source("modules/mod_dataUpload.R")
 source("modules/mod_preprocessing.R")
 source("modules/mod_modelTraining.R")
 source("modules/mod_performance.R")
 source("modules/mod_rocPlot.R")
+source("modules/mod_summary.R")
 
-# Define the overall UI and server functions by composing modules
+# Compose overall UI:
 app_ui <- function() {
   fluidPage(
     titlePanel("Modular Binary Outcome Analytics Pipeline"),
@@ -40,6 +32,7 @@ app_ui <- function() {
       ),
       mainPanel(
         tabsetPanel(
+          tabPanel("Data Summary", mod_summary_ui("summary")),
           tabPanel("Performance", mod_performance_ui("perf")),
           tabPanel("ROC Curve", mod_rocPlot_ui("rocPlot"))
         )
@@ -48,8 +41,9 @@ app_ui <- function() {
   )
 }
 
+# Compose overall server:
 app_server <- function(input, output, session) {
-  # Data Upload Module
+  # Data Upload Module returns a reactive dataset
   dataset <- mod_dataUpload_server("dataUpload")
   
   # Preprocessing Module (e.g., CV folds, imputation options)
@@ -61,4 +55,7 @@ app_server <- function(input, output, session) {
   # Performance and ROC modules (display results)
   mod_performance_server("perf", dataset, modelResults)
   mod_rocPlot_server("rocPlot", dataset, modelResults)
+  
+  # Summary Module uses the reactive dataset directly
+  mod_summary_server("summary", data = dataset)
 }
