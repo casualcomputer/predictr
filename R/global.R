@@ -1,57 +1,64 @@
 # R/global.R
 
-# Load required libraries
-library(shiny)
-library(caret)
-library(MASS)
-library(lme4)
-library(randomForest)
-library(xgboost)
-library(glmnet)
-library(pROC)
+# List of required packages
+list_of_packages <- c("shiny", "caret", "MASS", "lme4", 
+                      "randomForest", "xgboost", "glmnet", "pROC")
 
-# Source helper functions and modules
+# Install missing packages
+new_packages <- list_of_packages[!(list_of_packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages)
+
+# Load required packages
+library(shiny)
+library(caret)         # for confusionMatrix, cross-validation, preProcess, createDataPartition
+library(MASS)          # for stepAIC (stepwise regression)
+library(lme4)          # for mixed-effects logistic regression
+library(randomForest)  # for random forest
+library(xgboost)       # for gradient boosting
+library(glmnet)        # for ridge regression
+library(pROC)          # for ROC curves and AUC
+
+# Source helper functions
 source("helpers.R")
+
+# Source modules
 source("modules/mod_dataUpload.R")
 source("modules/mod_preprocessing.R")
 source("modules/mod_modelTraining.R")
 source("modules/mod_performance.R")
 source("modules/mod_rocPlot.R")
 
-# Compose the UI by combining modules
-ui <- fluidPage(
-  titlePanel("Binary Outcome Analytics Pipeline (With Extended Metrics)"),
-  sidebarLayout(
-    sidebarPanel(
-      mod_dataUpload_ui("dataUpload"),
-      mod_preprocessing_ui("preproc"),
-      mod_modelTraining_ui("modelTrain")
-    ),
-    mainPanel(
-      tabsetPanel(
-        tabPanel("Performance Summary", mod_performance_ui("perf")),
-        tabPanel("ROC Curves", mod_rocPlot_ui("roc"))
+# Define the overall UI and server functions by composing modules
+app_ui <- function() {
+  fluidPage(
+    titlePanel("Modular Binary Outcome Analytics Pipeline"),
+    sidebarLayout(
+      sidebarPanel(
+        mod_dataUpload_ui("dataUpload"),
+        mod_preprocessing_ui("preproc"),
+        mod_modelTraining_ui("modelTrain")
+      ),
+      mainPanel(
+        tabsetPanel(
+          tabPanel("Performance", mod_performance_ui("perf")),
+          tabPanel("ROC Curve", mod_rocPlot_ui("rocPlot"))
+        )
       )
     )
   )
-)
+}
 
-# Compose the server by calling modules and passing reactive values between them.
-server <- function(input, output, session) {
-  
+app_server <- function(input, output, session) {
   # Data Upload Module
   dataset <- mod_dataUpload_server("dataUpload")
   
-  # Preprocessing Module
-  preproc_data <- mod_preprocessing_server("preproc", data = dataset)
+  # Preprocessing Module (e.g., CV folds, imputation options)
+  preproc_data <- mod_preprocessing_server("preproc", dataset)
   
-  # Model Training Module (returns a list with the trained model and performance metrics)
-  modelResults <- mod_modelTraining_server("modelTrain", preproc_data = preproc_data)
+  # Model Training Module (variable selection, model training)
+  modelResults <- mod_modelTraining_server("modelTrain", preproc_data)
   
-  # Performance Module: display the metrics computed in the model training module.
-  mod_performance_server("perf", modelResults = modelResults, testData = reactive({ preproc_data()$test }))
-  
-  # ROC Plot Module: re-compute the ROC curve from the test data using the trained model.
-  mod_rocPlot_server("roc", testData = reactive({ preproc_data()$test }),
-                     model = reactive({ modelResults()$model }))
+  # Performance and ROC modules (display results)
+  mod_performance_server("perf", dataset, modelResults)
+  mod_rocPlot_server("rocPlot", dataset, modelResults)
 }
